@@ -3,22 +3,23 @@
 This project contains a serverless application built with AWS SAM for processing medical claims using AI. It includes automated document processing, user authentication, and secure document storage.
 
 ## Project Structure
+```
 src/
-├── functions/ # Lambda function handlers
-│ ├── auth/ # Authentication handlers
-│ ├── claims/ # Claims management handlers
-│ ├── documents/ # Document management handlers
-│ └── upload/ # Document upload & processing
-├── services/ # Business logic services
-│ ├── aiService.ts # Gemini AI integration
-│ ├── authService.ts # Authentication service
-│ ├── claimService.ts # Claims management
-│ └── documentService.ts # S3 operations
-└── utils/ # Shared utilities
-├── logger.ts # Logging utility
-├── validation.ts # Input validation
-└── responseFormatter.ts # API response formatting
-
+├── functions/                  # Lambda function handlers
+│   ├── auth/                   # Authentication handlers
+│   ├── claims/                 # Claims management handlers
+│   ├── documents/              # Document management handlers
+│   └── upload/                 # Document upload & processing
+├── services/                   # Business logic services
+│   ├── aiService.ts            # Gemini AI integration
+│   ├── authService.ts          # Authentication service
+│   ├── claimService.ts         # Claims management
+│   └── documentService.ts      # S3 operations
+└── utils/                      # Shared utilities
+    ├── logger.ts               # Logging utility
+    ├── validation.ts           # Input validation
+    └── responseFormatter.ts    # API response formatting
+```    
 ## API Endpoints
 
 - **Authentication**
