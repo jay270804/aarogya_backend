@@ -1,0 +1,205 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AI-Powered Medical Claims Processing System
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs18.x
+    MemorySize: 512
+    Environment:
+      Variables:
+        CLAIMS_TABLE: !Ref ClaimsTable
+        DOCUMENTS_BUCKET: !Ref DocumentsBucket
+        JWT_SECRET: ${JWT_SECRET}
+        GEMINI_API_KEY: ${GEMINI_API_KEY}
+    BuildMethod: esbuild
+    BuildProperties:
+      Minify: true
+      Target: "es2020"
+      Sourcemap: true
+      Loader:
+        - .ts=tsx
+
+Resources:
+  # API Gateway
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"  # Replace with your Vercel domain in production
+
+  # Lambda Functions
+  UploadDocumentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/upload/
+      Handler: index.handler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DocumentsBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClaimsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /documents
+            Method: post
+            Auth:
+              Authorizer: JwtAuthorizer
+
+  GetClaimsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/claims/
+      Handler: index.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ClaimsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /claims
+            Method: get
+            Auth:
+              Authorizer: JwtAuthorizer
+
+  GetClaimByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/claims/
+      Handler: getById.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ClaimsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /claims/{id}
+            Method: get
+            Auth:
+              Authorizer: JwtAuthorizer
+
+  GetPresignedUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/documents/
+      Handler: getPresignedUrl.handler
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DocumentsBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /documents/{id}/url
+            Method: get
+            Auth:
+              Authorizer: JwtAuthorizer
+
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/auth/
+      Handler: index.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        LoginApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /auth/login
+            Method: post
+        RegisterApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /auth/register
+            Method: post
+
+  JwtAuthorizer:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/authorizer/
+      Handler: index.handler
+
+  # DynamoDB Tables
+  ClaimsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  # S3 Bucket for Document Storage
+  DocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+            AllowedOrigins:
+              - '*'  # Replace with your Vercel domain in production
+            MaxAge: 3600
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  DocumentsBucketName:
+    Description: S3 bucket for document storage
+    Value: !Ref DocumentsBucket
+  ClaimsTableName:
+    Description: DynamoDB table for claims
+    Value: !Ref ClaimsTable
